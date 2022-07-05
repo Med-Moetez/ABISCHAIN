@@ -6,7 +6,8 @@ const SHA256 = require("./constants");
 const { Level } = require("level");
 const fs = require("fs");
 let db;
-var isEmpty = require("level-is-empty");
+// for checking if level db is empty
+const isEmpty = require("level-is-empty");
 
 // data base creation method
 let createDb = (peerId, Blockchain) => {

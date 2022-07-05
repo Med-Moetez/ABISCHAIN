@@ -8,6 +8,8 @@ const getPort = require("get-port");
 //Gets available TCP ports
 const chain = require("./chain");
 const CronJob = require("cron").CronJob;
+
+//Express.js is a back end web application framework for Node.js
 const express = require("express");
 const bodyParser = require("body-parser");
 
@@ -41,6 +43,18 @@ let initHttpServer = (port) => {
 
   //  api to retrieve our blockchain
   app.get("/blocks", (req, res) => res.send(JSON.stringify(chain.blockchain)));
+
+  // api to retrieve one block by index
+  app.get("/getBlock/:index", (req, res) => {
+    let blockIndex = req.params.index;
+    res.send(chain.blockchain[blockIndex]);
+  });
+
+  //  api to retrieve block form database by index
+  app.get("/getDBBlock/:index", (req, res) => {
+    let blockIndex = req.params.index;
+    chain.getDbBlock(blockIndex, res);
+  });
 
   app.listen(http_port, () =>
     console.log("Listening http on port: " + http_port)
@@ -289,6 +303,7 @@ const job = new CronJob("15 * * * * *", function () {
       (initiatorMiner === null || myPeerId.toString("hex") === initiatorMiner)
     ) {
       newBlock = chain.getGenesisBlock();
+      chain.storeBlock(newBlock);
     } else {
       newBlock = chain.generateNextBlock(null);
     }

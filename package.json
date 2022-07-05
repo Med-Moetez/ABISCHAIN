@@ -1,6 +1,17 @@
 {
   "dependencies": {
+    "-": "^0.0.1",
+    "body-parser": "^1.20.0",
+    "cron": "^2.0.0",
+    "crypto": "^1.0.1",
+    "crypto-js": "^4.1.1",
+    "dat-swarm-defaults": "^1.0.3",
+    "discovery-swarm": "^6.1.0",
+    "express": "^4.18.1",
+    "get-port": "^5.1.1",
     "level": "^8.0.0",
-    "level-is-empty": "^1.0.0"
+    "level-is-empty": "^1.0.0",
+    "moment": "^2.29.3",
+    "save": "^2.5.0"
   }
 }
