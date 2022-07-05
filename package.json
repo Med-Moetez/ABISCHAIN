@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "level": "^8.0.0",
+    "level-is-empty": "^1.0.0"
+  }
+}

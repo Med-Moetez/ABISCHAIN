@@ -2,6 +2,25 @@ const Block = require("./block.js").Block;
 const BlockHeader = require("./block.js").BlockHeader;
 const moment = require("moment");
 const SHA256 = require("./constants");
+// add level database
+const { Level } = require("level");
+const fs = require("fs");
+let db;
+var isEmpty = require("level-is-empty");
+
+// data base creation method
+let createDb = (peerId, Blockchain) => {
+  let dir = __dirname + "/db/" + peerId;
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir);
+    db = new Level(dir);
+  }
+};
+let checkEmptyDb = () => {
+  isEmpty(myDB, function (err, empty) {
+    return empty;
+  });
+};
 
 let getGenesisBlock = () => {
   let blockHeader = new BlockHeader(
@@ -27,8 +46,41 @@ let addBlock = (newBlock) => {
       newBlock.blockHeader.previousBlockHeader === prevBlock.blockHeader.hash
     ) {
       blockchain.push(newBlock);
+      storeBlock(newBlock); // When you generate a new block using the generateNextBlock method, you can now store the block in the LevelDB database
     }
   }
+};
+
+let addChainBlocks = (chain) => {
+  chain.map((newBlock) => {
+    if (newBlock.index === 0) {
+      blockchain.push(newBlock);
+    } else {
+      let prevBlock = getLatestBlock();
+      if (
+        prevBlock.index < newBlock.index &&
+        newBlock.blockHeader.previousBlockHeader === prevBlock.blockHeader.hash
+      ) {
+        blockchain.push(newBlock);
+        storeBlock(newBlock); // When you generate a new block using the generateNextBlock method, you can now store the block in the LevelDB database
+      }
+    }
+  });
+};
+//  method to store blockchain new block
+let storeBlock = (newBlock) => {
+  db.put(newBlock.index, JSON.stringify(newBlock), function (err) {
+    if (err) return console.log("Ooops!", err); // some kind of I/O error
+    console.log("--- Inserting block index: " + newBlock.index);
+  });
+};
+
+//  method to get block from blockchain by index
+let getDbBlock = (index, res) => {
+  db.get(index, function (err, value) {
+    if (err) return res.send(JSON.stringify(err));
+    return res.send(value);
+  });
 };
 
 let getBlock = (index) => {
@@ -48,7 +100,7 @@ const generateNextBlock = (txns) => {
   const blockHeader = new BlockHeader(1, prevHash, nextHash, nextTime);
   const newBlock = new Block(blockHeader, nextIndex, txns);
   blockchain.push(newBlock);
-  // storeBlock(newBlock);
+  storeBlock(newBlock);
   return newBlock;
 };
 
@@ -59,4 +111,9 @@ if (typeof exports != "undefined") {
   exports.getLatestBlock = getLatestBlock;
   exports.generateNextBlock = generateNextBlock;
   exports.getGenesisBlock = getGenesisBlock;
+  exports.createDb = createDb;
+  exports.getDbBlock = getDbBlock;
+  exports.storeBlock = storeBlock;
+  exports.addChainBlocks = addChainBlocks;
+  exports.checkEmptyDb = checkEmptyDb;
 }

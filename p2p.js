@@ -30,6 +30,7 @@ let MessageType = {
 };
 
 const myPeerId = crypto.randomBytes(32);
+chain.createDb(myPeerId.toString("hex"));
 console.log("myPeerId: " + myPeerId.toString("hex"));
 
 //  initHttpServer  will initiate the server and publish apis
@@ -131,7 +132,13 @@ const swarm = Swarm(config);
             console.log(
               "-----------RECEIVE_NEW_BLOCK------------- " + message.to
             );
-            chain.addBlock(JSON.parse(JSON.stringify(message.data)));
+
+            if (chain.checkEmptyDb && chain.blockchain.length > 0) {
+              chain.addChainBlocks(chain.blockchain);
+              chain.addBlock(JSON.parse(JSON.stringify(message.data)));
+            } else {
+              chain.addBlock(JSON.parse(JSON.stringify(message.data)));
+            }
             console.log(JSON.stringify(chain.blockchain));
             console.log(
               "-----------RECEIVE_NEW_BLOCK------------- " + message.to
@@ -285,7 +292,6 @@ const job = new CronJob("15 * * * * *", function () {
     } else {
       newBlock = chain.generateNextBlock(null);
     }
-
     chain.addBlock(newBlock);
     console.log(JSON.stringify(newBlock));
     writeMessageToPeers(MessageType.RECEIVE_NEW_BLOCK, newBlock);
