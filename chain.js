@@ -10,20 +10,20 @@ let db;
 const isEmpty = require("level-is-empty");
 
 // data base creation method
-let createDb = (peerId, Blockchain) => {
+const createDb = (peerId, Blockchain) => {
   let dir = __dirname + "/db/" + peerId;
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir);
     db = new Level(dir);
   }
 };
-let checkEmptyDb = () => {
+const checkEmptyDb = () => {
   isEmpty(myDB, function (err, empty) {
     return empty;
   });
 };
 
-let getGenesisBlock = () => {
+const getGenesisBlock = () => {
   let blockHeader = new BlockHeader(
     1,
     null,
@@ -35,9 +35,9 @@ let getGenesisBlock = () => {
   return new Block(blockHeader, 0, null);
 };
 
-let getLatestBlock = () => blockchain[blockchain.length - 1];
+const getLatestBlock = () => blockchain[blockchain.length - 1];
 
-let addBlock = (newBlock) => {
+const addBlock = (newBlock) => {
   if (newBlock.index === 0) {
     blockchain.push(newBlock);
   } else {
@@ -52,7 +52,7 @@ let addBlock = (newBlock) => {
   }
 };
 
-let addChainBlocks = (chain) => {
+const addChainBlocks = (chain) => {
   chain.map((newBlock) => {
     if (newBlock.index === 0) {
       blockchain.push(newBlock);
@@ -69,7 +69,7 @@ let addChainBlocks = (chain) => {
   });
 };
 //  method to store blockchain new block
-let storeBlock = (newBlock) => {
+const storeBlock = (newBlock) => {
   db.put(newBlock.index, JSON.stringify(newBlock), function (err) {
     if (err) return console.log("Ooops!", err); // some kind of I/O error
     console.log("--- Inserting block index: " + newBlock.index);
@@ -77,7 +77,7 @@ let storeBlock = (newBlock) => {
 };
 
 //  method to get block from blockchain by index
-let getDbBlock = (index, res) => {
+const getDbBlock = (index, res) => {
   db.get(index, function (err, value) {
     if (err) return res.send(JSON.stringify(err));
     return res.send(value);
@@ -105,6 +105,34 @@ const generateNextBlock = (txns) => {
   return newBlock;
 };
 
+// Calculate Hash function
+const calculateHash = (block) => {
+  const { previousBlockHeader, time } = block.blockHeader;
+  return SHA256(previousBlockHeader + time).toString();
+};
+
+// check blockchain validity
+const checkValid = (blockchain) => {
+  for (let i = 1; i < blockchain.length; i++) {
+    const currentBlock = blockchain[i];
+    const previousBlock = blockchain[i - 1];
+    // check current block hash validity
+    if (currentBlock.blockHeader.hash !== calculateHash(currentBlock)) {
+      return false;
+    }
+
+    // check previous block hash validity
+    if (
+      currentBlock.blockHeader.previousBlockHeader !==
+      previousBlock.blockHeader.hash
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+};
+
 if (typeof exports != "undefined") {
   exports.addBlock = addBlock;
   exports.getBlock = getBlock;
@@ -117,4 +145,5 @@ if (typeof exports != "undefined") {
   exports.storeBlock = storeBlock;
   exports.addChainBlocks = addChainBlocks;
   exports.checkEmptyDb = checkEmptyDb;
+  exports.checkValid = checkValid;
 }

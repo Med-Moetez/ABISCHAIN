@@ -55,6 +55,10 @@ let initHttpServer = (port) => {
     let blockIndex = req.params.index;
     chain.getDbBlock(blockIndex, res);
   });
+  //  api to check blockchain validity
+  app.get("/checkBlockchain", (req, res) => {
+    res.send(chain.checkValid(chain.blockchain));
+  });
 
   app.listen(http_port, () =>
     console.log("Listening http on port: " + http_port)
