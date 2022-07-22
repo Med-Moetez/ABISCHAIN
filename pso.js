@@ -44,7 +44,7 @@ class Space {
     this.target_error = target_error;
     this.n_particles = n_particles;
     this.particles = [];
-    this.gbest_value = Infinity;
+    this.gbest_value = 0;
     this.gbest_position = nj.array([Math.random() * 50, Math.random() * 50]);
   }
 
@@ -63,7 +63,7 @@ class Space {
   setPbest() {
     this.particles.map((particle) => {
       let fitness_cadidate = this.fitness(particle);
-      if (particle.pbest_value > fitness_cadidate) {
+      if (particle.pbest_value < fitness_cadidate) {
         particle.pbest_value = fitness_cadidate;
         particle.pbest_position = particle.position;
       }
@@ -72,7 +72,7 @@ class Space {
   setGbest() {
     this.particles.map((particle) => {
       let best_fitness_cadidate = this.fitness(particle);
-      if (this.gbest_value > best_fitness_cadidate) {
+      if (this.gbest_value < best_fitness_cadidate) {
         this.gbest_value = best_fitness_cadidate;
         this.gbest_position = particle.position;
       }
@@ -103,7 +103,7 @@ search_space.displayParticles();
 let iteration = 0;
 while (iteration < n_iterations) {
   search_space.setPbest();
-  search_space.setPbest();
+  search_space.setGbest();
   if (
     Math.abs(search_space.gbest_value - search_space.target) <=
     search_space.target_error
