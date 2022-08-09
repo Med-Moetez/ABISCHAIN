@@ -2,9 +2,17 @@ var nj = require("numjs");
 const randy = require("randy");
 const prompt = require("prompt-sync")({ sigint: true });
 
-const n_iterations = prompt("Inform the number of iterations: ");
-const target_error = prompt("Inform the target error: ");
-const n_particles = prompt("Inform the number of particles: ");
+// const n_iterations = prompt("Number of iterations: ");
+const target_error = prompt("Target error: ");
+const n_particles = prompt("Number of particles: ");
+
+const list_eliminator_ratio = prompt(
+  "Ratio to accept the pruned blockchain value=[0..1]: "
+);
+const n_head_lists = prompt(
+  "number of particles which represents the head of the list :"
+);
+const current_blockchain_size = prompt("current blockchain size : ");
 
 const W = 0.5;
 const c1 = 0.8;
@@ -17,6 +25,7 @@ class Particle {
     this.pbest_position = this.position;
     this.pbest_value = Infinity;
     this.velocity = nj.array([0, 0]);
+    this.size = Math.random() * 100;
   }
   //Etat actuelle d'une particule
   particleState = () => {
@@ -90,36 +99,54 @@ class Space {
     });
   }
 }
-
+console.time("execution Time");
 const search_space = new Space(Infinity, target_error, n_particles);
 let currentParticles = [];
-for (let i = 0; i < search_space.n_particles; i++) {
-  currentParticles.push(new Particle());
-}
-const particles_vector = currentParticles;
-search_space.particles = particles_vector;
-search_space.displayParticles();
-
-let iteration = 0;
-while (iteration < n_iterations) {
-  search_space.setPbest();
-  search_space.setGbest();
-  if (
-    Math.abs(search_space.gbest_value - search_space.target) <=
-    search_space.target_error
-  ) {
-    break;
+const main = () => {
+  for (let i = 0; i < search_space.n_particles; i++) {
+    currentParticles.push(new Particle());
   }
-  search_space.moveParticles();
-  iteration += 1;
-}
+  const particles_vector = currentParticles;
+  search_space.particles = particles_vector;
+  search_space.displayParticles();
+
+  let iteration = 0;
+  let currentBestParticle = null;
+  while (iteration < n_head_lists) {
+    currentBestParticle = currentParticles.filter(
+      (element) => element.pbest_position == search_space.gbest_position
+    );
+    search_space.setPbest();
+    search_space.setGbest();
+
+    if (
+      Math.abs(search_space.gbest_value - search_space.target) <=
+      search_space.target_error
+    ) {
+      break;
+    }
+    //evaluate prunning list in terms of size gain
+    if (
+      currentBestParticle.size / current_blockchain_size >
+      list_eliminator_ratio
+    ) {
+      const newlist = currentParticles.filter(
+        (element) => element.pbest_position != search_space.gbest_position
+      );
+      search_space.particles = newlist;
+    }
+
+    search_space.moveParticles();
+    iteration += 1;
+  }
+};
+main();
 
 console.log(
   "The best solution is: ",
-  JSON.stringify(search_space.gbest_position),
-  " in n_iterations: ",
-  JSON.stringify(iteration)
+  JSON.stringify(search_space.gbest_position)
 );
+console.timeEnd("execution Time");
 
 // const search_space = new Space(target, target_error, n_particles);
 
@@ -138,3 +165,8 @@ console.log(
 // x = trustrate {value creation + reputation}
 
 // y = number of bot connexions
+
+//script to evaluate prunning list in terms of size gain
+
+//so we will define a threshold of size gain else rejecting result
+//and a threshold to get the head of the list and get their resulst one by one
