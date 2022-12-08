@@ -1,5 +1,6 @@
 const Block = require("./block.js").Block;
 const BlockHeader = require("./block.js").BlockHeader;
+const { MerkleTree } = require("merkletreejs");
 const moment = require("moment");
 const SHA256 = require("./constants");
 // add level database
@@ -18,21 +19,23 @@ const createDb = (peerId, Blockchain) => {
   }
 };
 const checkEmptyDb = () => {
-  isEmpty(myDB, function (err, empty) {
+  isEmpty(myDB, function(err, empty) {
     return empty;
   });
 };
 
 const getGenesisBlock = () => {
+  const tree = new MerkleTree([], SHA256);
+  const rootHash = tree.getRoot().toString("hex");
+
   let blockHeader = new BlockHeader(
     1,
     null,
     "0x1bc1100000000000000000000000000000000000000000000",
-    moment().unix(),
-    "0x171b7320",
-    "1CAD2B8C"
+    rootHash,
+    moment().unix()
   );
-  return new Block(blockHeader, 0, null);
+  return new Block(blockHeader, 0, null, false);
 };
 
 const getLatestBlock = () => blockchain[blockchain.length - 1];
@@ -70,17 +73,23 @@ const addChainBlocks = (chain) => {
 };
 //  method to store blockchain new block
 const storeBlock = (newBlock) => {
-  db.put(newBlock.index, JSON.stringify(newBlock), function (err) {
+  db.put(newBlock.index, JSON.stringify(newBlock), function(err) {
     if (err) return console.log("Ooops!", err); // some kind of I/O error
     console.log("--- Inserting block index: " + newBlock.index);
   });
 };
 
 //  method to get block from blockchain by index
-const getDbBlock = (index, res) => {
-  db.get(index, function (err, value) {
-    if (err) return res.send(JSON.stringify(err));
-    return res.send(value);
+const getDbBlock = (index) => {
+  return new Promise((resolve, reject) => {
+    db.get(index, function(err, value) {
+      if (err) {
+        reject(err);
+        return console.log(JSON.stringify(err));
+      }
+
+      resolve(value);
+    });
   });
 };
 
@@ -91,15 +100,25 @@ let getBlock = (index) => {
 
 const blockchain = [];
 
-const generateNextBlock = (txns) => {
-  const prevBlock = getLatestBlock(),
-    prevHash = prevBlock.blockHeader.hash;
-  (nextIndex = prevBlock.index + 1),
-    (nextTime = moment().unix()),
-    (nextHash = SHA256(prevHash + nextTime).toString());
+const generateNextBlock = async (txns) => {
+  const prevBlock = getLatestBlock();
+  const prevHash = prevBlock.blockHeader.hash;
+  const nextIndex = prevBlock.index + 1;
+  const nextTime = moment().unix();
+  const dataToArray = Object.entries(txns);
+  const leaves = await dataToArray.map((x) => SHA256(x));
+  const tree = new MerkleTree(leaves, SHA256);
+  const rootHash = tree.getRoot().toString("hex");
+  const nextHash = SHA256(prevHash + nextTime + rootHash).toString();
 
-  const blockHeader = new BlockHeader(1, prevHash, nextHash, nextTime);
-  const newBlock = new Block(blockHeader, nextIndex, txns);
+  const blockHeader = new BlockHeader(
+    1,
+    prevHash,
+    nextHash,
+    rootHash,
+    nextTime
+  );
+  const newBlock = new Block(blockHeader, nextIndex, txns, false);
   blockchain.push(newBlock);
   storeBlock(newBlock);
   return newBlock;
@@ -112,7 +131,7 @@ const calculateHash = (block) => {
 };
 
 // check blockchain validity
-const checkValid = (blockchain) => {
+const simpleCheckValid = (blockchain) => {
   for (let i = 1; i < blockchain.length; i++) {
     const currentBlock = blockchain[i];
     const previousBlock = blockchain[i - 1];
@@ -132,7 +151,71 @@ const checkValid = (blockchain) => {
 
   return true;
 };
+// check blockchain all data validity
+const deepCheckValid = (blockchain) => {
+  for (let i = 1; i < blockchain.length; i++) {
+    const currentBlock = blockchain[i];
+    const dataToArray = Object.entries(currentBlock.txns);
+    const leaves = dataToArray.map((x) => SHA256(x));
+    const tree = new MerkleTree(leaves, SHA256);
+    const root = tree.getRoot().toString("hex");
 
+    for (let i = 0; i < dataToArray; i++) {
+      const leaf = SHA256(dataToArray[i]);
+      const proof = tree.getProof(leaf);
+      if (tree.verify(proof, leaf, root)) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+};
+// check a specific part of pruned block
+const checkDataOfPrunedBlock = (data, block) => {
+  const dataToArray = Object.entries(block.txns);
+  const leaves = dataToArray.map((x) => SHA256(x));
+  const tree = new MerkleTree(leaves, SHA256);
+  const root = tree.getRoot().toString("hex");
+
+  const leaf = SHA256(data);
+  const proof = tree.getProof(leaf);
+  if (tree.verify(proof, leaf, root)) {
+    return false;
+  }
+  return true;
+};
+
+//check pruned block validity
+const checkPrunedBlock = (block) => {
+  if (block.blockHeader.hash !== blockchain[block.index].blockHeader.hash) {
+    return false;
+  }
+  //real block data
+  const dataToArray = Object.entries(blockchain[block.index].txns);
+  const leaves = dataToArray.map((x) => SHA256(x));
+  const tree = new MerkleTree(leaves, SHA256);
+  const root = tree.getRoot().toString("hex");
+
+  //  verify pruned blockdata
+  const prunedDataToArray = Object.entries(block.txns);
+  for (let i = 0; i < prunedDataToArray; i++) {
+    const leaf = SHA256(prunedDataToArray[i]);
+    const proof = tree.getProof(leaf);
+    if (tree.verify(proof, leaf, root)) {
+      return false;
+    }
+  }
+  return true;
+};
+
+//check the pruned blockchain
+const checkPrunedBlockchain = (prunedBlockchain) => {
+  for (let i = 1; i < prunedBlockchain.length; i++) {
+    return checkPrunedBlock(prunedBlockchain[i]);
+  }
+  return true;
+};
 if (typeof exports != "undefined") {
   exports.addBlock = addBlock;
   exports.getBlock = getBlock;
@@ -145,5 +228,9 @@ if (typeof exports != "undefined") {
   exports.storeBlock = storeBlock;
   exports.addChainBlocks = addChainBlocks;
   exports.checkEmptyDb = checkEmptyDb;
-  exports.checkValid = checkValid;
+  exports.simpleCheckValid = simpleCheckValid;
+  exports.deepCheckValid = deepCheckValid;
+  exports.checkDataOfPrunedBlock = checkDataOfPrunedBlock;
+  exports.checkPrunedBlock = checkPrunedBlock;
+  exports.checkPrunedBlockchain = checkPrunedBlockchain;
 }

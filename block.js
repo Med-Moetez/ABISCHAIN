@@ -1,13 +1,16 @@
 exports.BlockHeader = class BlockHeader {
-  constructor(version, previousBlockHeader, hash, time, nBits, nounce) {
+  constructor(version, previousBlockHeader, hash, rootHash, time) {
     // Version - at the time of writing there are 4 block versions.
     this.version = version;
 
     // previous block header hash - A SHA256(SHA256()) hash of previous block’s header. Ensures that previous block cannot be changed as this block needs to be changed as well.
     this.previousBlockHeader = previousBlockHeader;
 
-    // current blockhash.
+    // current block hash.
     this.hash = hash;
+
+    // txns hash
+    this.rootHash = rootHash;
 
     // a Unix epoch time when the miner started hashing the header.
     this.time = time;
@@ -15,7 +18,7 @@ exports.BlockHeader = class BlockHeader {
 };
 
 exports.Block = class Block {
-  constructor(blockHeader, index, txns) {
+  constructor(blockHeader, index, txns, pruned) {
     this.blockHeader = blockHeader;
 
     // GenesisBlock is the first block - block 0
@@ -23,5 +26,8 @@ exports.Block = class Block {
 
     // txns is the raw transaction in the block.
     this.txns = txns;
+
+    // pruned or not
+    this.pruned = pruned;
   }
 };

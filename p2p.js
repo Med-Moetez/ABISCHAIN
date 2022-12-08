@@ -1,3 +1,8 @@
+// env variables
+require("dotenv").config();
+//apis
+const apis = require("./apis");
+const process = require("node:process");
 const crypto = require("crypto");
 
 const Swarm = require("discovery-swarm");
@@ -12,15 +17,23 @@ const CronJob = require("cron").CronJob;
 //Express.js is a back end web application framework for Node.js
 const express = require("express");
 const bodyParser = require("body-parser");
+const axios = require("axios");
+
+//peer caching system
+const Redis = require("redis");
+const utils = require("./utlis");
 
 // our variables of network peers and connection sequence
 const peers = {};
 let connSeq = 0;
-
 let channel = "myBlockchain";
 let registeredMiners = [];
 let initiatorMiner = null;
 let lastBlockMinedBy = null;
+const redisClient = Redis.createClient({
+  host: "localhost",
+  port: 6379,
+});
 
 // define a message type to request and receive the latest block
 let MessageType = {
@@ -45,19 +58,67 @@ let initHttpServer = (port) => {
   app.get("/blocks", (req, res) => res.send(JSON.stringify(chain.blockchain)));
 
   // api to retrieve one block by index
-  app.get("/getBlock/:index", (req, res) => {
+  app.get("/getBlock/:index", async (req, res) => {
     let blockIndex = req.params.index;
+
+    const redisKeys = await utils.getRedisKeys(redisClient);
+    Promise.all(
+      redisKeys.map((key) => {
+        return new Promise((resolve, reject) => {
+          redisClient.get(key, async (error, data) => {
+            if (error) return reject(error);
+            if (data != null) {
+              return resolve(JSON.parse(data));
+            }
+          });
+        });
+      })
+    ).then((values) => {
+      // cachedData
+      const cachedData = values.map((el) => JSON.parse(el));
+
+      // relatedData to cached data
+      const DataRelatedToBlockchain = cachedData.map((el) => {
+        generateActiveData(el, chain.blockchain);
+      });
+      // add condition to not prune newly created blocks not pruned
+      const dataToPrune = chain.blockchain.filter((blockchainEL) =>
+        DataRelatedToBlockchain.every(
+          (cachedEl) =>
+            cachedEl?.blockHeader?.hash !== blockchainEL?.blockHeader?.hash
+        )
+      );
+      /// data to prune
+      console.log("dataToPrune", dataToPrune);
+    });
     res.send(chain.blockchain[blockIndex]);
   });
 
   //  api to retrieve block form database by index
-  app.get("/getDBBlock/:index", (req, res) => {
+  app.get("/getDBBlock/:index", async (req, res) => {
     let blockIndex = req.params.index;
-    chain.getDbBlock(blockIndex, res);
+    try {
+      const block = await utils.getOrSetCache(
+        redisClient,
+        `blockdataIndex=${blockIndex}`,
+        async () => {
+          const data = await chain.getDbBlock(blockIndex);
+          return data;
+        }
+      );
+      return res.send(block);
+    } catch (err) {
+      res.send("error", err);
+    }
   });
-  //  api to check blockchain validity
+  //  api to simple check blockchain validity
   app.get("/checkBlockchain", (req, res) => {
-    res.send(chain.checkValid(chain.blockchain));
+    res.send(chain.simpleCheckValid(chain.blockchain));
+  });
+
+  //  api to deep check blockchain validity
+  app.get("/deepcheckBlockchain", (req, res) => {
+    res.send(chain.deepCheckValid(chain.blockchain));
   });
 
   app.listen(http_port, () =>
@@ -251,18 +312,18 @@ sendMessage = (id, type, data) => {
   );
 };
 
-setTimeout(function () {
+setTimeout(function() {
   writeMessageToPeers(MessageType.REQUEST_ALL_REGISTER_MINERS, null);
 }, 5000);
 
 // using a setTimeout function to send a message send a request to retrieve the latest block every 5 seconds
-setTimeout(function () {
+setTimeout(function() {
   writeMessageToPeers(MessageType.REQUEST_BLOCK, {
     index: chain.blockchain.length === 0 ? 0 : chain.getLatestBlock().index + 1,
   });
 }, 5000);
 
-setTimeout(function () {
+setTimeout(function() {
   registeredMiners.push(myPeerId.toString("hex"));
   console.log("----------Register my miner --------------");
   console.log(registeredMiners);
@@ -270,7 +331,7 @@ setTimeout(function () {
   console.log("---------- Register my miner --------------");
 }, 7000);
 
-const job = new CronJob("15 * * * * *", function () {
+const job = new CronJob("15 * * * * *", async function() {
   let index = 0; // first block
 
   // requesting next block from your next miner
@@ -298,9 +359,10 @@ const job = new CronJob("15 * * * * *", function () {
       myPeerId.toString("hex")
     )
   );
+
   if (registeredMiners[index] === myPeerId.toString("hex")) {
     console.log("-----------create next block -----------------");
-
+    // block creation
     let newBlock = null;
     if (
       chain.blockchain.length === 0 &&
@@ -309,7 +371,17 @@ const job = new CronJob("15 * * * * *", function () {
       newBlock = chain.getGenesisBlock();
       chain.storeBlock(newBlock);
     } else {
-      newBlock = chain.generateNextBlock(null);
+      const randomApi = utils.generateRandom(
+        0,
+        Object.values(apis.APIS).length
+      );
+      const data = await axios.get(
+        process.env.BASE_URL +
+          Object.values(apis.APIS)[randomApi] +
+          `?size=${randomApi}`
+      );
+
+      newBlock = chain.generateNextBlock(data?.data);
     }
     chain.addBlock(newBlock);
     console.log(JSON.stringify(newBlock));
@@ -317,8 +389,19 @@ const job = new CronJob("15 * * * * *", function () {
     console.log(JSON.stringify(chain.blockchain));
     console.log("-----------create next block -----------------");
   }
-  setTimeout(function () {
+  // display current blockchain state
+  setTimeout(function() {
     console.log("CURRENT ABISCHAIN BLOCKCHAIN  STATE", chain.blockchain);
   }, 5000);
 });
 job.start();
+
+process.on("SIGINT", async () => {
+  console.log("Leaving the Abischain network.");
+  /// clear redis data
+  redisClient.flushdb(function(err, succeeded) {
+    console.log("redis cache cleaned successfully", succeeded);
+    // will be true if successfull
+    process.exit();
+  });
+});

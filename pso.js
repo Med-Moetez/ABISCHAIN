@@ -21,13 +21,13 @@ const c2 = 0.9;
 // particle class
 class Particle {
   constructor() {
-    this.position = nj.array([Math.random() * 50, Math.random() * 50]);
+    this.position = nj.array([Math.random() * 100, Math.random() * 100]);
     this.pbest_position = this.position;
     this.pbest_value = Infinity;
     this.velocity = nj.array([0, 0]);
     this.size = Math.random() * 100;
   }
-  //Etat actuelle d'une particule
+  // actual state particle
   particleState = () => {
     console.log(
       "I am at ",
@@ -36,7 +36,7 @@ class Particle {
       JSON.stringify(this.pbest_position)
     );
   };
-  //methode pour changer la position d'une particule
+  //update particle position
   move() {
     const newPosition = nj.array([
       this.position.get(0) + this.velocity.get(0),
@@ -54,10 +54,10 @@ class Space {
     this.n_particles = n_particles;
     this.particles = [];
     this.gbest_value = 0;
-    this.gbest_position = nj.array([Math.random() * 50, Math.random() * 50]);
+    this.gbest_position = nj.array([Math.random() * 100, Math.random() * 100]);
   }
 
-  //methode qui affiche toutes les particules
+  //display all particles
   displayParticles = () => {
     this.particles.map((particle) => {
       particle.particleState();
@@ -147,26 +147,3 @@ console.log(
   JSON.stringify(search_space.gbest_position)
 );
 console.timeEnd("execution Time");
-
-// const search_space = new Space(target, target_error, n_particles);
-
-// target = inifity
-
-// target_error = target error to break
-
-// n_partiles = number of bots
-
-// z best bot in the network
-
-// z = x + y + c
-
-// minimal value is 1 so c =1
-
-// x = trustrate {value creation + reputation}
-
-// y = number of bot connexions
-
-//script to evaluate prunning list in terms of size gain
-
-//so we will define a threshold of size gain else rejecting result
-//and a threshold to get the head of the list and get their resulst one by one
