@@ -1,5 +1,7 @@
 // env variables
 require("dotenv").config();
+//hdd space
+const hddSpace = require("hdd-space");
 //apis
 const apis = require("./apis");
 const process = require("node:process");
@@ -256,7 +258,9 @@ const swarm = Swarm(config);
         console.log(
           "--- registeredMiners before: " + JSON.stringify(registeredMiners)
         );
-        let index = registeredMiners.indexOf(peerId);
+        let index = registeredMiners.findIndex((object) => {
+          return object.id === peerId;
+        });
         if (index > -1) registeredMiners.splice(index, 1);
         console.log(
           "--- registeredMiners end: " + JSON.stringify(registeredMiners)
@@ -322,9 +326,13 @@ setTimeout(function() {
     index: chain.blockchain.length === 0 ? 0 : chain.getLatestBlock().index + 1,
   });
 }, 5000);
+setTimeout(async () => {
+  const freeSpace = await hddSpace.fetchHddInfo({ format: "gb" });
 
-setTimeout(function() {
-  registeredMiners.push(myPeerId.toString("hex"));
+  let nodeType =
+    parseInt(freeSpace?.total?.free) > 100 ? "fullNode" : "lightNode";
+
+  registeredMiners.push({ id: myPeerId.toString("hex"), nodeType });
   console.log("----------Register my miner --------------");
   console.log(registeredMiners);
   writeMessageToPeers(MessageType.REGISTER_MINER, registeredMiners);
