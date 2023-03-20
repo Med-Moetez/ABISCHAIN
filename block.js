@@ -1,19 +1,34 @@
 exports.BlockHeader = class BlockHeader {
-  constructor(version, previousBlockHeader, hash, rootHash, time) {
-    // Version - at the time of writing there are 4 block versions.
+  constructor(
+    version,
+    previousBlockHeader,
+    hash,
+    rootHash,
+    createdAt,
+    miner,
+    dataValue
+  ) {
+    // Version of blockchain.
     this.version = version;
 
-    // previous block header hash - A SHA256(SHA256()) hash of previous block’s header. Ensures that previous block cannot be changed as this block needs to be changed as well.
+    // Previous block header hash - A SHA256(SHA256()) hash of previous block’s header. Ensures that previous block cannot be changed as this block needs to be changed as well.
     this.previousBlockHeader = previousBlockHeader;
 
-    // current block hash.
+    // Current block hash.
     this.hash = hash;
 
-    // txns hash
+    // Txns hash
     this.rootHash = rootHash;
 
-    // a Unix epoch time when the miner started hashing the header.
-    this.time = time;
+    // Time the agent created the block.
+    this.createdAt = createdAt;
+
+    // Agent id and type
+    this.miner = miner;
+
+    // Block value according to its data
+    //dataValue={healthValue:1,financeValue:1,itValue:1}
+    this.dataValue = dataValue;
   }
 };
 
@@ -24,10 +39,10 @@ exports.Block = class Block {
     // GenesisBlock is the first block - block 0
     this.index = index;
 
-    // txns is the raw transaction in the block.
-    this.txns = txns;
-
-    // pruned or not
+    // Pruned or not
     this.pruned = pruned;
+
+    // Txns is the raw transaction in the block.
+    this.txns = txns;
   }
 };

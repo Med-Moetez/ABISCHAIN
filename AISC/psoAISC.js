@@ -1,4 +1,18 @@
 var nj = require("numjs");
+const randy = require("randy");
+const prompt = require("prompt-sync")({ sigint: true });
+
+// const n_iterations = prompt("Number of iterations: ");
+const target_error = prompt("Target error: ");
+const n_particles = prompt("Number of particles: ");
+
+const list_eliminator_ratio = prompt(
+  "Ratio to accept the pruned blockchain value=[0..1]: "
+);
+const n_head_lists = prompt(
+  "number of particles which represents the head of the list :"
+);
+const current_blockchain_size = prompt("current blockchain size : ");
 
 const W = 0.5;
 const c1 = 0.8;
@@ -6,14 +20,12 @@ const c2 = 0.9;
 
 // particle class
 class Particle {
-  constructor(args) {
-    const { id, alpha, y, size } = args;
-    this.id = id;
-    this.position = nj.array([alpha, y]);
+  constructor() {
+    this.position = nj.array([Math.random() * 100, Math.random() * 100]);
     this.pbest_position = this.position;
     this.pbest_value = Infinity;
     this.velocity = nj.array([0, 0]);
-    this.size = size;
+    this.size = Math.random() * 100;
   }
   // actual state particle
   particleState = () => {
@@ -36,10 +48,10 @@ class Particle {
 
 //  Space Class
 class Space {
-  constructor(target, target_error, particles) {
+  constructor(target, target_error, n_particles) {
     this.target = target;
     this.target_error = target_error;
-    this.n_particles = particles.length;
+    this.n_particles = n_particles;
     this.particles = [];
     this.gbest_value = 0;
     this.gbest_position = nj.array([Math.random() * 100, Math.random() * 100]);
@@ -87,28 +99,14 @@ class Space {
     });
   }
 }
-
-const pso = (
-  target_error,
-  particles,
-  list_eliminator_ratio,
-  n_head_lists,
-  current_blockchain_size
-) => {
-  const particles_vector = particles.reduce(
-    (accumulator, currentValue) =>
-      accumulator.push(
-        new Particle(
-          currentValue.agentId,
-          currentValue.alpha,
-          currentValue.y,
-          currentValue.size
-        )
-      ),
-    []
-  );
-
-  const search_space = new Space(Infinity, target_error, particles);
+console.time("execution Time");
+const search_space = new Space(Infinity, target_error, n_particles);
+let currentParticles = [];
+const main = () => {
+  for (let i = 0; i < search_space.n_particles; i++) {
+    currentParticles.push(new Particle());
+  }
+  const particles_vector = currentParticles;
   search_space.particles = particles_vector;
   search_space.displayParticles();
 
@@ -141,15 +139,11 @@ const pso = (
     search_space.moveParticles();
     iteration += 1;
   }
-
-  const result = search_space?.gbest_position
-    ? particles.find(
-        (item) =>
-          search_space?.gbest_position[0] === item.alpha &&
-          search_space?.gbest_position[1] === item.y
-      )
-    : null;
-  return result;
 };
+main();
 
-module.exports = pso;
+console.log(
+  "The best solution is: ",
+  JSON.stringify(search_space.gbest_position)
+);
+console.timeEnd("execution Time");

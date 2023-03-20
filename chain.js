@@ -24,7 +24,7 @@ const checkEmptyDb = () => {
   });
 };
 
-const getGenesisBlock = () => {
+const getGenesisBlock = (miner, dataValue) => {
   const tree = new MerkleTree([], SHA256);
   const rootHash = tree.getRoot().toString("hex");
 
@@ -33,9 +33,11 @@ const getGenesisBlock = () => {
     null,
     "0x1bc1100000000000000000000000000000000000000000000",
     rootHash,
-    moment().unix()
+    moment().unix(),
+    miner,
+    dataValue
   );
-  return new Block(blockHeader, 0, null, false);
+  return new Block(blockHeader, 0, false, null);
 };
 
 const getLatestBlock = () => blockchain[blockchain.length - 1];
@@ -100,7 +102,7 @@ let getBlock = (index) => {
 
 const blockchain = [];
 
-const generateNextBlock = async (txns) => {
+const generateNextBlock = async (miner, dataValue, txns) => {
   const prevBlock = getLatestBlock();
   const prevHash = prevBlock.blockHeader.hash;
   const nextIndex = prevBlock.index + 1;
@@ -116,9 +118,11 @@ const generateNextBlock = async (txns) => {
     prevHash,
     nextHash,
     rootHash,
-    nextTime
+    nextTime,
+    miner,
+    dataValue
   );
-  const newBlock = new Block(blockHeader, nextIndex, txns, false);
+  const newBlock = new Block(blockHeader, nextIndex, false, txns);
   blockchain.push(newBlock);
   storeBlock(newBlock);
   return newBlock;

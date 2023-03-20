@@ -1,4 +1,13 @@
+//env
 require("dotenv").config();
+
+//axios
+const axios = require("axios");
+
+//apis
+const apis = require("./apis");
+
+// data search package
 const { dataSetGenerate, search, getDataset } = require("data-search");
 
 // redis func
@@ -9,13 +18,18 @@ const getOrSetCache = (redisClient, key, cb) => {
       if (data != null) {
         return resolve(JSON.parse(data));
       }
-      const freshData = await cb();
-      redisClient.setex(
-        key,
-        process.env.DEFAULT_EXPIRATION_REDIS,
-        JSON.stringify(freshData)
-      );
-      resolve(freshData);
+
+      try {
+        const freshData = await cb();
+        redisClient.setex(
+          key,
+          process.env.DEFAULT_EXPIRATION_REDIS,
+          JSON.stringify(freshData)
+        );
+        resolve(freshData);
+      } catch (error) {
+        reject(error);
+      }
     });
   });
 };
@@ -58,8 +72,28 @@ const generateRandom = (min, max) => {
   return rand;
 };
 
+const fetchFakeData = async () => {
+  const randomApi = generateRandom(0, Object.values(apis.APIS).length);
+  const data = await axios.get(
+    process.env.BASE_URL +
+      Object.values(apis.APIS)[randomApi] +
+      `?size=${randomApi}`
+  );
+  return data?.data;
+};
+
+const difference = (a, b) => {
+  return a - b;
+};
+
+const getObjectKey = (obj, value) => {
+  return Object.keys(obj).find((key) => obj[key] === value);
+};
+
 exports.getOrSetCache = getOrSetCache;
 exports.getRedisKeys = getRedisKeys;
 exports.generateActiveData = generateActiveData;
 exports.generateRandom = generateRandom;
-
+exports.fetchFakeData = fetchFakeData;
+exports.difference = difference;
+exports.getObjectKey = getObjectKey;

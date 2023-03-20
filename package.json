@@ -1,4 +1,12 @@
 {
+  "name": "abischain",
+  "version": "1.0.0",
+  "description": "abischain blockchain",
+  "main": "./p2p.js",
+  "bin": "./p2p.js",
+  "scripts": {
+    "start": "node p2p"
+  },
   "dependencies": {
     "-": "^0.0.1",
     "axios": "^1.1.3",
@@ -11,14 +19,17 @@
     "discovery-swarm": "^6.1.0",
     "dotenv": "^16.0.3",
     "express": "^4.18.1",
+    "folder-size": "^0.1.0",
     "get-port": "^5.1.1",
     "hdd-space": "^1.2.0",
     "js-son-agent": "^0.0.15",
     "level": "^8.0.0",
     "level-is-empty": "^1.0.0",
     "merkletreejs": "^0.2.32",
+    "ml-classify-text": "^2.0.1",
     "moment": "^2.29.3",
     "numjs": "^0.16.1",
+    "object-sizeof": "^2.6.1",
     "prompt-sync": "^4.2.0",
     "randy": "^1.5.1",
     "redis": "3.0.0",
