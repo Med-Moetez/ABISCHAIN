@@ -9,6 +9,8 @@ const fs = require("fs");
 let db;
 // for checking if level db is empty
 const isEmpty = require("level-is-empty");
+//the blockchain
+const blockchain = [];
 
 // data base creation method
 const createDb = (peerId, Blockchain) => {
@@ -19,15 +21,19 @@ const createDb = (peerId, Blockchain) => {
   }
 };
 const checkEmptyDb = () => {
-  isEmpty(myDB, function(err, empty) {
+  isEmpty(db, function(err, empty) {
     return empty;
   });
 };
 
-const getGenesisBlock = (miner, dataValue) => {
+const getGenesisBlock = (miner) => {
   const tree = new MerkleTree([], SHA256);
   const rootHash = tree.getRoot().toString("hex");
-
+  const dataValue = {
+    healthValue: 0,
+    financeValue: 0,
+    itValue: 0,
+  };
   let blockHeader = new BlockHeader(
     1,
     null,
@@ -37,7 +43,7 @@ const getGenesisBlock = (miner, dataValue) => {
     miner,
     dataValue
   );
-  return new Block(blockHeader, 0, false, null);
+  return new Block(blockHeader, 0, null, false);
 };
 
 const getLatestBlock = () => blockchain[blockchain.length - 1];
@@ -100,8 +106,6 @@ let getBlock = (index) => {
   else return null;
 };
 
-const blockchain = [];
-
 const generateNextBlock = async (miner, dataValue, txns) => {
   const prevBlock = getLatestBlock();
   const prevHash = prevBlock.blockHeader.hash;
@@ -122,7 +126,7 @@ const generateNextBlock = async (miner, dataValue, txns) => {
     miner,
     dataValue
   );
-  const newBlock = new Block(blockHeader, nextIndex, false, txns);
+  const newBlock = new Block(blockHeader, nextIndex, txns, false);
   blockchain.push(newBlock);
   storeBlock(newBlock);
   return newBlock;
@@ -164,7 +168,7 @@ const deepCheckValid = (blockchain) => {
     const tree = new MerkleTree(leaves, SHA256);
     const root = tree.getRoot().toString("hex");
 
-    for (let i = 0; i < dataToArray; i++) {
+    for (let j = 0; j < dataToArray.length; j++) {
       const leaf = SHA256(dataToArray[i]);
       const proof = tree.getProof(leaf);
       if (tree.verify(proof, leaf, root)) {

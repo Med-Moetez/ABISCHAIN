@@ -30,6 +30,7 @@
     "moment": "^2.29.3",
     "numjs": "^0.16.1",
     "object-sizeof": "^2.6.1",
+    "perf_hooks": "^0.0.1",
     "prompt-sync": "^4.2.0",
     "randy": "^1.5.1",
     "redis": "3.0.0",

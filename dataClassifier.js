@@ -1,4 +1,4 @@
-// data classifier
+// data classifier ==> classify text using n-grams and cosine similarity.
 const { Classifier } = require("ml-classify-text");
 const { healthData, financeData, ITData } = require("./TrainingData/index");
 const utils = require("./utlis");

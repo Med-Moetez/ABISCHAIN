@@ -10,7 +10,7 @@ const crypto = require("crypto");
 //This module implements peer connection state and builds on discovery-channel which implements peer discovery.
 //This uses TCP (establishing connection) sockets by default and has experimental support for UTP (without establishing connection).
 const Swarm = require("discovery-swarm");
-//to simulate bots we will create a network swarm that uses discovery-channel to find and connect peers ("peers represent our bots")
+//to simulate agents we will create a network swarm that uses discovery-channel to find and connect peers ("peers represent our agents")
 const defaults = require("dat-swarm-defaults");
 //Deploys servers that are used to discover other peers
 const getPort = require("get-port");
@@ -38,6 +38,16 @@ const { dataTypePredict } = require("./dataClassifier");
 // import sizeof to get object size
 const sizeof = require("object-sizeof");
 
+// performance evaluation
+const { performance, PerformanceObserver } = require("perf_hooks");
+
+const perfObserver = new PerformanceObserver((items) => {
+  items.getEntries().forEach((entry) => {
+    console.log("performance", entry);
+  });
+});
+perfObserver.observe({ entryTypes: ["function"] });
+
 // our variables of network peers and connection sequence
 const peers = {};
 let connSeq = 0;
@@ -46,7 +56,7 @@ let blockchainNetworkState = [];
 let votingList = [];
 let initiatorMiner = null;
 let lastBlockMinedBy = null;
-let mempool = {};
+let mempool = [];
 let pruningListsMempool = [];
 let agentPruningList = {};
 
@@ -64,9 +74,8 @@ let pendingRequestedBlock = null;
 
 const redisClient = Redis.createClient({
   host: "localhost",
-  port: 6379,
+  port: process.argv[2] || 6379,
 });
-
 let blockChainSize = 0;
 // define a message type to request and receive the latest block
 let MessageType = {
@@ -76,6 +85,7 @@ let MessageType = {
   REQUEST_ALL_REGISTER_MINERS: "requestAllRegisterMiners",
   REGISTER_MINER: "registerMiner",
   ADD_DATA_TO_MEMPOOL: "addDataToMempool",
+  RESET_MEMPOOL: "resetMempool",
   RECEIVE_PRUNED_BLOCKCHAIN: "ReceivePrunedBlockchain",
   SEND_PRUNING_LIST: "SendPruningList",
   RECEIVE_PRUNING_LIST: "ReceivePruningList",
@@ -250,7 +260,7 @@ const swarm = Swarm(config);
       console.log("----------- Received Message start -------------");
       console.log(
         "from: " + peerId,
-        "to: " + peerId.toString(message.to),
+        "to: " + toString(message.to),
         "my: " + myPeerId,
         "type: " + JSON.stringify(message.type)
       );
@@ -260,7 +270,7 @@ const swarm = Swarm(config);
       switch (message.type) {
         case MessageType.REQUEST_BLOCK:
           console.log("-----------REQUEST_BLOCK-------------");
-          let requestedIndex = JSON.parse(JSON.stringify(message.data)).index;
+          let requestedIndex = message.data.index;
           let requestedBlock = chain.getBlock(requestedIndex);
           if (requestedBlock)
             writeMessageToPeerToId(
@@ -274,7 +284,7 @@ const swarm = Swarm(config);
 
         case MessageType.RECEIVE_NEXT_BLOCK:
           console.log("-----------RECEIVE_NEXT_BLOCK-------------");
-          chain.addBlock(JSON.parse(JSON.stringify(message.data)));
+          chain.addBlock(message.data);
           console.log(JSON.stringify(chain.blockchain));
           let nextBlockIndex =
             chain.blockchain.length === 0
@@ -295,15 +305,15 @@ const swarm = Swarm(config);
 
             if (chain.checkEmptyDb && chain.blockchain.length > 0) {
               chain.addChainBlocks(chain.blockchain);
-              chain.addBlock(JSON.parse(JSON.stringify(message.data)));
+              chain.addBlock(message.data);
             } else {
-              chain.addBlock(JSON.parse(JSON.stringify(message.data)));
+              chain.addBlock(message.data);
               votingList = [];
               pruningListsMempool = [];
               //∑_(𝒊=𝟏)^𝒏▒〖𝒙_𝒊∗𝒗_(𝒊 ) 〗
               const blockchainAgentAddedValue = chain.blockchain.filter(
                 (block, index) => {
-                  if (block.blockHeader.miner === myPeerId) {
+                  if (block.blockHeader.miner.id === myPeerId) {
                     const {
                       healthValue,
                       financeValue,
@@ -362,7 +372,7 @@ const swarm = Swarm(config);
 
             votingList = [];
             pruningListsMempool = [];
-            prunedBlockchainInfo = JSON.parse(JSON.stringify(message.data));
+            prunedBlockchainInfo = message.data;
 
             console.log(
               "-----------RECEIVE_PRUNED_BLOCKCHAIN------------- " + message.to
@@ -377,7 +387,7 @@ const swarm = Swarm(config);
             );
 
             const newpruningListsMempool = pruningListsMempool.push(
-              JSON.parse(JSON.stringify(message.data))
+              message.data
             );
             pruningListsMempool = newpruningListsMempool;
 
@@ -395,7 +405,7 @@ const swarm = Swarm(config);
             MessageType.REGISTER_MINER,
             blockchainNetworkState
           );
-          blockchainNetworkState = JSON.parse(JSON.stringify(message.data));
+          blockchainNetworkState = message.data;
           console.log(
             "-----------REQUEST_ALL_REGISTER_MINERS------------- " + message.to
           );
@@ -403,30 +413,32 @@ const swarm = Swarm(config);
 
         case MessageType.REGISTER_MINER:
           console.log("-----------REGISTER_MINER------------- " + message.to);
-          let miners = JSON.stringify(message.data);
-          blockchainNetworkState = JSON.parse(miners);
-          console.log(blockchainNetworkState);
+          blockchainNetworkState = message.data;
+          console.log(JSON.stringify(blockchainNetworkState));
           console.log("-----------REGISTER_MINER------------- " + message.to);
           break;
 
         case MessageType.ADD_DATA_TO_MEMPOOL:
-          console.log(
-            "-----------ADD_DATA_TO_MEMPOOL------------- " + message.to
-          );
-          mempool = {
-            ...mempool,
-            ...JSON.parse(JSON.stringify(message.data)),
-          };
-          console.log(mempool);
-          console.log(
-            "-----------ADD_DATA_TO_MEMPOOL------------- " + message.to
-          );
+          // console.log(
+          //   "-----------ADD_DATA_TO_MEMPOOL------------- " + message.to
+          // );
+          mempool = [...mempool, ...message.data];
+          // console.log(JSON.stringify(mempool));
+          // console.log(
+          //   "-----------ADD_DATA_TO_MEMPOOL------------- " + message.to
+          // );
+          break;
+
+        case MessageType.RESET_MEMPOOL:
+          console.log("-----------RESET_MEMPOOL------------- " + message.to);
+          mempool = [];
+          console.log("-----------RESET_MEMPOOL------------- " + message.to);
           break;
 
         case MessageType.REQUEST_SPECIFIC_BLOCK:
           if (nodeType === "fullNode") {
             console.log("-----------REQUEST_SPECIFIC_BLOCK-------------");
-            let index = JSON.stringify(message.data);
+            let index = message.data;
             let requestedSpecifcBlock = chain.getBlock(index);
             writeMessageToPeerToId(
               peerId,
@@ -439,8 +451,8 @@ const swarm = Swarm(config);
         case MessageType.SEND_SPECIFIC_BLOCK:
           console.log("-----------SEND_SPECIFIC_BLOCK-------------");
           if (message.data) {
-            pendingRequestedBlock = JSON.stringify(message.data);
-            return console.log(pendingRequestedBlock);
+            pendingRequestedBlock = message.data;
+            return console.log(JSON.stringify(message.data));
           }
 
           console.log("-----------SEND_SPECIFIC_BLOCK-------------");
@@ -522,12 +534,12 @@ setTimeout(function() {
   writeMessageToPeers(MessageType.REQUEST_ALL_REGISTER_MINERS, null);
 }, 5000);
 
-// using a setTimeout function to send a message send a request to retrieve the latest block every 5 seconds
+// using a setTimeout function to send a message send a request to retrieve the latest block
 setTimeout(function() {
   writeMessageToPeers(MessageType.REQUEST_BLOCK, {
     index: chain.blockchain.length === 0 ? 0 : chain.getLatestBlock().index + 1,
   });
-}, 5000);
+}, 500);
 
 setTimeout(async () => {
   /// get node free disk space
@@ -544,11 +556,10 @@ setTimeout(async () => {
 }, 7000);
 
 // add data to mempool  every 5 seconds
-setTimeout(async function() {
+setInterval(async function() {
   const fakeData = await utils.fetchFakeData();
-  mempool =
-    Object.keys(mempool).length === 0 ? fakeData : { ...mempool, ...fakeData };
-  writeMessageToPeers(MessageType.ADD_DATA_TO_MEMPOOL, mempool);
+  mempool = mempool.length > 0 ? fakeData : [...mempool, ...fakeData];
+  writeMessageToPeers(MessageType.ADD_DATA_TO_MEMPOOL, JSON.stringify(mempool));
 }, 5000);
 
 // \\ main // \\
@@ -579,7 +590,7 @@ const job = new CronJob("15 * * * * *", async function() {
   lastBlockMinedBy = blockchainNetworkState[index];
   console.log(
     "-- REQUESTING NEW BLOCK FROM: " +
-      blockchainNetworkState[index].id +
+      blockchainNetworkState[index]?.id +
       ", index: " +
       index
   );
@@ -593,28 +604,35 @@ const job = new CronJob("15 * * * * *", async function() {
     )
   );
 
-  if (blockchainNetworkState.length > 0 && chain.blockchain.length > 0) {
+  if (blockchainNetworkState.length > 0 && chain.blockchain.length > 1) {
     // voting data
-    const votes = await blockchainNetworkState.reduce(
-      (accumulator, currentValue) => {
+    const votes = await blockchainNetworkState?.reduce(
+      async (accumulator, currentValue) => {
         //∑_(𝒊=𝟏)^𝒏▒〖𝒙_𝒊∗𝒗_(𝒊 ) 〗
-        const blockchainAgentAddedValue = chain.blockchain.filter(
+        const blockchainAgentBlocks = await chain.blockchain?.filter(
           (block, index) => {
-            if (block.blockHeader.miner === currentValue.id) {
-              const {
-                healthValue,
-                financeValue,
-                itValue,
-              } = block.blockHeader.dataValue;
-              return index * (3 * healthValue + 2 * financeValue + itValue);
+            if (block.blockHeader.miner.id === currentValue.id) {
+              return block;
             }
           }
         );
+        const blockchainAgentAddedValue = await blockchainAgentBlocks.map(
+          (block, index) => {
+            const {
+              healthValue,
+              financeValue,
+              itValue,
+            } = block.blockHeader.dataValue;
+            return index * (3 * healthValue + 2 * financeValue + itValue);
+          }
+        );
+
         // vote according to our formula
         const voteValue =
           blockchainAgentAddedValue?.reduce((a, b) => a + b) +
           currentValue.connections +
           1;
+
         const agent = {
           id: currentValue.id,
           nodeType: currentValue.nodeType,
@@ -622,6 +640,7 @@ const job = new CronJob("15 * * * * *", async function() {
           voteValue: voteValue,
         };
         accumulator.push(agent);
+        return accumulator;
       },
       []
     );
@@ -640,11 +659,12 @@ const job = new CronJob("15 * * * * *", async function() {
 
     // merge agents voting results into an array
     let mergeAllAgentsVotes = await filteredVotingList?.reduce((acc, item) => {
-      return acc.push(...item.votes);
+      acc.push(...item.votes);
+      return acc;
     }, []);
 
     // get each agent global voting value
-    let agentsVotesFinalValues = await mergeAllAgentsVotes.reduce(
+    let agentsVotesFinalValues = await mergeAllAgentsVotes?.reduce(
       (acc, item) => {
         let existItem = acc.find((currentItem) => item.id === currentItem.id);
         if (existItem) {
@@ -663,21 +683,31 @@ const job = new CronJob("15 * * * * *", async function() {
       .slice(0)
       .reverse()
       .findIndex((item) => item.blockHeader.miner.type === "fullNode");
+
+    ////heerefinalAgentVotesList.sort is not a f
+
     // final AgentVotes List
     const finalAgentVotesList =
       lastBlockMinedByFullnode > 10
         ? agentsVotesFinalValues.filter((item) => item.nodeType === "fullNode")
-        : lastBlockMinedByFullnode;
+        : agentsVotesFinalValues;
     // sort agents by their global voting values
     const descOrderAgents = finalAgentVotesList.sort(
       (a, b) => parseFloat(b.voteValue) - parseFloat(a.voteValue)
     );
     // if the last block is mined by the best agent in the current list, the second agent in the list will do the mining job
     agentToMine =
-      descOrderAgents[0] === chain.getLatestBlock().blockHeader.miner &&
+      descOrderAgents[0].id === chain.getLatestBlock().blockHeader.miner.id &&
       descOrderAgents.length > 1
-        ? descOrderAgents[1]
-        : descOrderAgents[0];
+        ? descOrderAgents[1].id
+        : descOrderAgents[0].id;
+
+    console.log(
+      "The miner agent",
+      agentToMine,
+      descOrderAgents,
+      chain.getLatestBlock().blockHeader.miner.id
+    );
   }
 
   if (agentToMine === myPeerId) {
@@ -692,7 +722,7 @@ const job = new CronJob("15 * * * * *", async function() {
       (initiatorMiner === null || myPeerId === initiatorMiner)
     ) {
       newBlock = chain.getGenesisBlock(agent);
-      chain.storeBlock(newBlock);
+      chain.addBlock(newBlock);
     } else {
       // check mempoolSiZE en MB
       const currentMempoolDataSize =
@@ -704,13 +734,17 @@ const job = new CronJob("15 * * * * *", async function() {
         ) / 1000;
       // check mempoolDataSize > 1 mb && the elapsed time from last mined block = 60s
       if (currentMempoolDataSize > 1 || diffTimeFromLastMinedBlock > 60) {
-        const resultDataValue = dataTypePredict(mempool);
+        const resultDataValue = await dataTypePredict(mempool);
         //Create the new block with mempool data
-        newBlock = chain.generateNextBlock(agent, resultDataValue, mempool);
+        newBlock = await chain.generateNextBlock(
+          agent,
+          resultDataValue,
+          mempool
+        );
 
         // clear mempool
-        mempool = {};
-
+        mempool = [];
+        writeMessageToPeers(MessageType.RESET_MEMPOOL, null);
         chain.addBlock(newBlock);
 
         console.log(JSON.stringify(newBlock));
@@ -718,7 +752,7 @@ const job = new CronJob("15 * * * * *", async function() {
         votingList = [];
       }
       const diffTime =
-        Date.now().getTime() - prunedBlockchainInfo.lastTimePruned.getTime();
+        new Date().getTime() - prunedBlockchainInfo.lastTimePruned;
       const diffhoursLastTimePrunnig = Math.floor(diffTime / 1000 / 60);
 
       // current DB Size
@@ -754,6 +788,18 @@ const job = new CronJob("15 * * * * *", async function() {
           n_head_lists,
           current_blockchain_size
         );
+        // prunning performance
+        const perfWrapper = performance.timerify(
+          pso(
+            target_error,
+            pruningListsMempool,
+            list_eliminator_ratio,
+            n_head_lists,
+            current_blockchain_size
+          )
+        );
+
+        perfWrapper();
         // returned psoList
         if (psoList) {
           // delete pruning data from current currentBlockchainToPrune
@@ -773,7 +819,7 @@ const job = new CronJob("15 * * * * *", async function() {
             prunerId: myPeerId,
             choosedList: psoList,
             prunedBlockchainSize: newPrunedBlockchainSize,
-            lastTimePruned: Date.now(),
+            lastTimePruned: new Date().getTime(),
             data: newPrunedblockchain,
           };
           writeMessageToPeers(
