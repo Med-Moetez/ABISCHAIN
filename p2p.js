@@ -133,7 +133,7 @@ let initHttpServer = (port) => {
       const redisKeys = await utils.getRedisKeys(redisClient);
       // check if block is already in the agent cache
       if (!redisKeys.includes(`blockdataIndex=${blockIndex}`)) {
-        Promise.all(
+        await Promise.all(
           redisKeys.map((key) => {
             return new Promise((resolve, reject) => {
               redisClient.get(key, async (error, data) => {
@@ -629,7 +629,7 @@ const job = new CronJob("15 * * * * *", async function() {
 
         // vote according to our formula
         const voteValue =
-          blockchainAgentAddedValue?.reduce((a, b) => a + b) +
+          blockchainAgentAddedValue?.reduce((a, b) => a + b, 0) +
           currentValue.connections +
           1;
 
