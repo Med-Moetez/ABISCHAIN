@@ -11,34 +11,59 @@ const apis = require("./apis");
 const { dataSetGenerate, search, getDataset } = require("data-search");
 
 // redis func
-const getOrSetCache = (redisClient, key, cb) => {
-  return new Promise((resolve, reject) => {
-    redisClient.get(key, async (error, data) => {
-      if (error) return reject(error);
-      if (data != null) {
-        return resolve(JSON.parse(data));
-      }
+// const getOrSetCache = (redisClient, key, cb) => {
+//   return new Promise((resolve, reject) => {
+//     redisClient.get(key, async (error, data) => {
+//       if (error) return reject(error);
+//       if (data != null) {
+//         return resolve(JSON.parse(data));
+//       }
 
-      try {
-        const freshData = await cb();
-        redisClient.setex(
-          key,
-          process.env.DEFAULT_EXPIRATION_REDIS,
-          JSON.stringify(freshData)
-        );
-        resolve(freshData);
-      } catch (error) {
-        reject(error);
-      }
+//       try {
+//         const freshData = await cb();
+//         redisClient.setex(
+//           key,
+//           process.env.DEFAULT_EXPIRATION_REDIS,
+//           JSON.stringify(freshData)
+//         );
+//         resolve(freshData);
+//       } catch (error) {
+//         reject(error);
+//       }
+//     });
+//   });
+// };
+
+const getOrSetCache = async (redisClient, key, fetchFunction) => {
+  const cachedData = await utils.getCache(redisClient, key);
+  if (cachedData !== null) {
+    return JSON.parse(cachedData);
+  }
+  const newData = await fetchFunction();
+  await utils.setCache(redisClient, key, JSON.stringify(newData));
+  return newData;
+};
+const getCache = async (redisClient, key) => {
+  return new Promise((resolve, reject) => {
+    redisClient.get(key, (error, data) => {
+      if (error) return reject(error);
+      resolve(data);
     });
   });
 };
-
+const setCache = async (redisClient, key, value) => {
+  return new Promise((resolve, reject) => {
+    redisClient.set(key, value, (error, response) => {
+      if (error) return reject(error);
+      resolve(response);
+    });
+  });
+};
 const getRedisKeys = (redisClient) => {
   return new Promise((resolve, reject) => {
     redisClient.keys("*", (err, keys) => {
       if (err) return reject(err);
-      return resolve(keys);
+      resolve(keys);
     });
   });
 };
@@ -91,6 +116,8 @@ const getObjectKey = (obj, value) => {
 };
 
 exports.getOrSetCache = getOrSetCache;
+exports.getCache = getCache;
+exports.setCache = setCache;
 exports.getRedisKeys = getRedisKeys;
 exports.generateActiveData = generateActiveData;
 exports.generateRandom = generateRandom;

@@ -57,7 +57,7 @@ const dataTypePredict = async (data) => {
       const ModelToTrain = utils.getObjectKey(result, largest);
       //new training data
       const newTrainingData = await Object.keys(data).reduce(function(r, k) {
-        return r.concat(k, object[k]);
+        return r.concat(k, data[k]);
       }, []);
       classifier.train(newTrainingData, ModelToTrain);
     }

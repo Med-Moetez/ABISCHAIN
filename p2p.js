@@ -21,7 +21,7 @@ const CronJob = require("cron").CronJob;
 //Express.js is a back end web application framework for Node.js
 const express = require("express");
 const bodyParser = require("body-parser");
-
+const cors = require("cors");
 //peer caching system
 const Redis = require("redis");
 const utils = require("./utlis");
@@ -52,7 +52,7 @@ perfObserver.observe({ entryTypes: ["function"] });
 const peers = {};
 let connSeq = 0;
 let channel = "myBlockchain";
-let blockchainNetworkState = [];
+var blockchainNetworkState = [];
 let votingList = [];
 let initiatorMiner = null;
 let lastBlockMinedBy = null;
@@ -74,7 +74,8 @@ let pendingRequestedBlock = null;
 
 const redisClient = Redis.createClient({
   host: "localhost",
-  port: process.argv[2] || 6379,
+  // port: process.argv[2] || 6379,
+  port: 6379,
 });
 let blockChainSize = 0;
 // define a message type to request and receive the latest block
@@ -109,76 +110,163 @@ console.log("myPeerId: " + myPeerId);
 
 //  initHttpServer  will initiate the server and publish apis
 let initHttpServer = (port) => {
-  let http_port = "80" + port.toString().slice(-2);
+  // let http_port = "80" + port.toString().slice(-2);
+  let http_port = process.argv[2] || "8075";
+
   let app = express();
+  app.use(cors());
   app.use(bodyParser.json());
 
   //  api to retrieve our blockchain
-  app.get("/blocks", (req, res) => res.send(JSON.stringify(chain.blockchain)));
+  app.get("/stats", (req, res) => {
+    let fullNodeCount = 0;
+    let lightNodeCount = 0;
+
+    blockchainNetworkState.forEach((node) => {
+      if (node.nodeType === "fullNode") {
+        fullNodeCount++;
+      } else if (node.nodeType === "lightNode") {
+        lightNodeCount++;
+      }
+    });
+
+    const blockchainTransactionsCount = chain.blockchain.reduce(
+      (acc, block) => {
+        const dataValue = block.txns?.length || 0;
+        acc += dataValue || 0;
+        return acc;
+      },
+      0
+    );
+
+    const reducedDataValue = chain.blockchain.reduce(
+      (acc, block) => {
+        const dataValue = block.blockHeader.dataValue;
+        acc.healthValue += dataValue.healthValue || 0;
+        acc.financeValue += dataValue.financeValue || 0;
+        acc.itValue += dataValue.itValue || 0;
+        return acc;
+      },
+      { healthValue: 0, financeValue: 0, itValue: 0 }
+    );
+
+    const dataType = {
+      healthValue: reducedDataValue.healthValue / chain.blockchain.length || 0,
+      financeValue:
+        reducedDataValue.financeValue / chain.blockchain.length || 0,
+      itValue: reducedDataValue.itValue / chain.blockchain.length || 0,
+    };
+    const typesStats = { fullNodeCount, lightNodeCount };
+
+    const txnLengths = chain.blockchain?.map((block) =>
+      block.txns ? block.txns.length : 0
+    );
+    const agentsCount = blockchainNetworkState.length;
+
+    const data = {
+      blocksCount: chain?.blockchain?.length || 0,
+      dataType,
+      typesStats,
+      txnLengths,
+      agentsCount,
+      prunerId: prunedBlockchainInfo?.prunerId,
+      lastTimePruned: prunedBlockchainInfo?.lastTimePruned,
+      blockchainTransactionsCount,
+      pendingTransactionsCount: mempool?.length,
+    };
+
+    res.json(data);
+  });
+
+  //  api to retrieve our blockchain
+  app.post("/addData", (req, res) => {
+    const jsonData = JSON.parse(req.body.body);
+    mempool.push(jsonData);
+    res.send("product is added to the mempool");
+  });
+
+  //api to retrieve mempool
+  app.get("/mempool", (req, res) => res.json(mempool));
+
+  //  api to retrieve our blockchain
+  app.get("/lastBlock", (req, res) =>
+    res.json(chain.blockchain[chain.blockchain.length - 1])
+  );
+  //  api to retrieve our blockchain
+  app.get("/blocks", (req, res) => res.json(chain.blockchain));
+
+  //  api to retrieve our pruned blockchain
+  app.get("/prunedBlocks", (req, res) => {
+    const result = prunedBlockchainInfo?.data || chain.blockchain;
+    res.json(result);
+  });
 
   // api to retrieve one block by index
   app.get("/getBlock/:index", async (req, res) => {
-    let blockIndex = req.params.index;
-    let resultBlock;
     try {
-      await utils.getOrSetCache(
-        redisClient,
-        `blockdataIndex=${blockIndex}`,
-        async () => {
-          resultBlock = await chain.getDbBlock(blockIndex);
-          return resultBlock;
-        }
-      );
+      let blockIndex = req.params.index;
+      let resultBlock;
 
-      const redisKeys = await utils.getRedisKeys(redisClient);
-      // check if block is already in the agent cache
-      if (!redisKeys.includes(`blockdataIndex=${blockIndex}`)) {
-        await Promise.all(
-          redisKeys.map((key) => {
-            return new Promise((resolve, reject) => {
-              redisClient.get(key, async (error, data) => {
-                if (data != null) {
-                  return resolve(JSON.parse(data));
-                }
-                if (error) return reject(error);
-              });
-            });
-          })
-        ).then((values) => {
-          // cachedData
-          const cachedData = values.map((el) => JSON.parse(el));
-
-          // relatedData to cached data
-          const DataRelatedToBlockchain = cachedData.map((el) => {
-            generateActiveData(el, chain.blockchain);
-          });
-          // add condition to not prune newly created blocks not pruned
-          const dataToPrune = chain.blockchain.filter((blockchainEL) =>
-            DataRelatedToBlockchain.every(
-              (cachedEl) =>
-                cachedEl?.blockHeader?.hash !== blockchainEL?.blockHeader?.hash
-            )
-          );
-          /// data to prune
-          console.log("dataToPrune", dataToPrune);
-          agentPruningList = { ...agentPruningList, ...dataToPrune };
-        });
+      if (chain.blockchain.length - 1 < blockIndex) {
+        return res.json({ error: "Block index out of range" });
       }
 
-      return res.send(resultBlock);
+      resultBlock = await chain.getBlock(blockIndex);
+      return res.json(resultBlock);
+      //   resultBlock = await utils.getOrSetCache(
+      //     redisClient,
+      //     `blockdataIndex=${blockIndex}`,
+      //     async () => {
+      //       return await chain.getBlock(blockIndex);
+      //     }
+      //   );
+
+      //   const redisKeys = await utils.getRedisKeys(redisClient);
+
+      //   // Check if block is already in the agent cache
+      //   if (!redisKeys.includes(`blockdataIndex=${blockIndex}`)) {
+      //     const cachedData = await Promise.all(
+      //       redisKeys.map(async (key) => {
+      //         const data = await utils.getCache(redisClient, key);
+      //         return JSON.parse(data);
+      //       })
+      //     );
+
+      //     const dataRelatedToBlockchain = cachedData.map((el) => {
+      //       return generateActiveData(el, chain.blockchain);
+      //     });
+
+      //     const dataToPrune = chain.blockchain.filter((blockchainEl) => {
+      //       return dataRelatedToBlockchain.every((cachedEl) => {
+      //         return (
+      //           cachedEl?.blockHeader?.hash !== blockchainEl?.blockHeader?.hash
+      //         );
+      //       });
+      //     });
+
+      //     // dataToPrune should be an array of blocks
+      //     console.log("dataToPrune", dataToPrune);
+      //     // Assuming agentPruningList is a global variable defined elsewhere
+      //     agentPruningList = {
+      //       ...agentPruningList,
+      //       ...dataToPrune,
+      //     };
+      //   }
+
+      //   return res.json(resultBlock);
     } catch (err) {
       if (nodeType === "lightNode") {
         writeMessageToPeers(MessageType.REQUEST_SPECIFIC_BLOCK, blockIndex);
         setTimeout(function() {
           if (pendingRequestedBlock) {
-            res.send(resultBlock);
+            res.json(resultBlock);
             pendingRequestedBlock = null;
           } else {
-            res.send("error", err);
+            res.json({ error: "Error occurred while processing the request" });
           }
         }, 5000);
       } else {
-        res.send("error", err);
+        res.json({ error: "Error occurred while processing the request" });
       }
     }
   });
@@ -195,19 +283,19 @@ let initHttpServer = (port) => {
           return data;
         }
       );
-      return res.send(block);
+      res.json(block);
     } catch (err) {
-      res.send("error", err);
+      res.json("error", err);
     }
   });
   //  api to simple check blockchain validity
   app.get("/checkBlockchain", (req, res) => {
-    res.send(chain.simpleCheckValid(chain.blockchain));
+    res.json(chain.simpleCheckValid(chain.blockchain));
   });
 
   //  api to deep check blockchain validity
   app.get("/deepcheckBlockchain", (req, res) => {
-    res.send(
+    res.json(
       nodeType === "fullNode"
         ? chain.deepCheckValid(chain.blockchain)
         : chain.checkPrunedBlockchain(chain.blockchain)
@@ -319,7 +407,7 @@ const swarm = Swarm(config);
                       financeValue,
                       itValue,
                     } = block.blockHeader.dataValue;
-                    // data weight eg. weight eqaul to 3 for health, as we consider health data is more imporatant than finance or it data
+                    // data weight eg. weight equal to 3 for health, as we consider health data is more important than finance or it data
                     return (
                       index * (3 * healthValue + 2 * financeValue + itValue)
                     );
@@ -548,6 +636,10 @@ setTimeout(async () => {
   nodeType = parseInt(freeSpace?.total?.free) > 100 ? "fullNode" : "lightNode";
   const agent = { id: myPeerId, nodeType, connections: peerConnections };
 
+  if (!blockchainNetworkState) {
+    blockchainNetworkState = []; // Initialize blockchainNetworkState if it's null
+  }
+
   blockchainNetworkState.push(agent);
   console.log("----------Register my agent --------------");
   console.log(blockchainNetworkState);
@@ -557,8 +649,10 @@ setTimeout(async () => {
 
 // add data to mempool  every 5 seconds
 setInterval(async function() {
-  const fakeData = await utils.fetchFakeData();
-  mempool = mempool.length > 0 ? fakeData : [...mempool, ...fakeData];
+  // fetch fake data
+  // const fakeData = await utils.fetchFakeData();
+  // mempool = mempool.length > 0 ? fakeData : [...mempool, ...fakeData];
+
   writeMessageToPeers(MessageType.ADD_DATA_TO_MEMPOOL, JSON.stringify(mempool));
 }, 5000);
 
@@ -616,7 +710,7 @@ const job = new CronJob("15 * * * * *", async function() {
             }
           }
         );
-        const blockchainAgentAddedValue = await blockchainAgentBlocks.map(
+        const blockchainAgentAddedValue = await blockchainAgentBlocks?.map(
           (block, index) => {
             const {
               healthValue,
@@ -639,10 +733,10 @@ const job = new CronJob("15 * * * * *", async function() {
           connections: currentValue.connections,
           voteValue: voteValue,
         };
-        accumulator.push(agent);
+        accumulator?.push(agent);
         return accumulator;
       },
-      []
+      Promise.resolve([])
     );
 
     agentvotes = {
@@ -724,120 +818,131 @@ const job = new CronJob("15 * * * * *", async function() {
       newBlock = chain.getGenesisBlock(agent);
       chain.addBlock(newBlock);
     } else {
-      // check mempoolSiZE en MB
-      const currentMempoolDataSize =
-        Buffer.byteLength(JSON.stringify(mempool)) / Math.pow(1024, 2);
-      // check the time of the last block created per second
-      const diffTimeFromLastMinedBlock =
-        Math.abs(
-          new Date().getTime() - chain.getLatestBlock().blockHeader.createdAt
-        ) / 1000;
-      // check mempoolDataSize > 1 mb && the elapsed time from last mined block = 60s
-      if (currentMempoolDataSize > 1 || diffTimeFromLastMinedBlock > 60) {
-        const resultDataValue = await dataTypePredict(mempool);
-        //Create the new block with mempool data
-        newBlock = await chain.generateNextBlock(
-          agent,
-          resultDataValue,
-          mempool
-        );
+      if (mempool.length > 0) {
+        // check mempoolSiZE en MB
+        const currentMempoolDataSize =
+          Buffer.byteLength(JSON.stringify(mempool)) / Math.pow(1024, 2);
+        // check the time of the last block created per second
+        const diffTimeFromLastMinedBlock =
+          Math.abs(
+            new Date().getTime() - chain.getLatestBlock().blockHeader.createdAt
+          ) / 1000;
+        // check mempoolDataSize > 1 mb && the elapsed time from last mined block = 60s
+        if (currentMempoolDataSize > 1 || diffTimeFromLastMinedBlock > 60) {
+          const resultDataValue = await dataTypePredict(mempool);
+          //Create the new block with mempool data
+          newBlock = await chain.generateNextBlock(
+            agent,
+            resultDataValue,
+            mempool
+          );
 
-        // clear mempool
-        mempool = [];
-        writeMessageToPeers(MessageType.RESET_MEMPOOL, null);
-        chain.addBlock(newBlock);
+          // clear mempool
+          mempool = [];
+          writeMessageToPeers(MessageType.RESET_MEMPOOL, null);
+          chain.addBlock(newBlock);
 
-        console.log(JSON.stringify(newBlock));
-        writeMessageToPeers(MessageType.RECEIVE_NEW_BLOCK, newBlock);
-        votingList = [];
-      }
-      const diffTime =
-        new Date().getTime() - prunedBlockchainInfo.lastTimePruned;
-      const diffhoursLastTimePrunnig = Math.floor(diffTime / 1000 / 60);
-
-      // current DB Size
-      await folderSize(dbPath, { ignoreHidden: true }, (err, data) => {
-        if (err) {
-          throw err;
+          console.log(JSON.stringify(newBlock));
+          writeMessageToPeers(MessageType.RECEIVE_NEW_BLOCK, newBlock);
+          votingList = [];
         }
-        let dbSize = data?.ldb;
-        blockChainSize = (dbSize / Math.pow(1024, 2)).toFixed(2);
-      });
-      /// if elapsed time from last pruning is over than 10min or blockChainSize over 10MGB
-      //  then do pso for selecting pruning list and return pruned blockchain
-      const currentPrunningBlockchainSize = (
-        prunedBlockchainInfo.prunedBlockchainSize / Math.pow(1024, 2)
-      ).toFixed(2);
-      if (
-        (diffhoursLastTimePrunnig > 10 || currentPrunningBlockchainSize > 10) &&
-        pruningListsMempool.length > 0
-      ) {
-        /// target error default value 1
-        const target_error = 1;
-        /// lists
-        // top lists
-        const n_head_lists = 10;
-        // ratio eliminator
-        const list_eliminator_ratio = 0.9;
-        ///current_blockchain_size
-        const current_blockchain_size = prunedBlockchainSize;
-        let psoList = pso(
-          target_error,
-          pruningListsMempool,
-          list_eliminator_ratio,
-          n_head_lists,
-          current_blockchain_size
-        );
-        // prunning performance
-        const perfWrapper = performance.timerify(
-          pso(
+        const diffTime =
+          new Date().getTime() - prunedBlockchainInfo.lastTimePruned;
+        const diffhoursLastTimePrunnig = Math.floor(diffTime / 1000 / 60);
+
+        // current DB Size
+        await folderSize(dbPath, { ignoreHidden: true }, (err, data) => {
+          if (err) {
+            throw err;
+          }
+          let dbSize = data?.ldb;
+          blockChainSize = (dbSize / Math.pow(1024, 2)).toFixed(2);
+        });
+        /// if elapsed time from last pruning is over than 10min or blockChainSize over 10MGB
+        //  then do pso for selecting pruning list and return pruned blockchain
+        const currentPrunningBlockchainSize = (
+          prunedBlockchainInfo.prunedBlockchainSize / Math.pow(1024, 2)
+        ).toFixed(2);
+
+        // testing pruning values
+        const testdiffhoursLastTimePrunnig = 1;
+        const testcurrentPrunningBlockchainSize = 1;
+        if (
+          // (   diffhoursLastTimePrunnig > 10 ||
+          //   currentPrunningBlockchainSize > 10)&&
+          //  pruningListsMempool.length > 0)
+
+          pruningListsMempool.length > 0
+        ) {
+          /// target error default value 1
+          const target_error = 1;
+          /// lists
+          // top lists
+          const n_head_lists = 10;
+          // ratio eliminator
+          const list_eliminator_ratio = 0.9;
+          ///current_blockchain_size
+          const current_blockchain_size = prunedBlockchainSize;
+          let psoList = pso(
             target_error,
             pruningListsMempool,
             list_eliminator_ratio,
             n_head_lists,
             current_blockchain_size
-          )
-        );
-
-        perfWrapper();
-        // returned psoList
-        if (psoList) {
-          // delete pruning data from current currentBlockchainToPrune
-          const newPrunedblockchain = await currentBlockchainToPrune.map(
-            (block) => {
-              return Object.keys(block).forEach(function(key, index) {
-                if (psoList.pruningData.includes(key)) delete block[key];
-              });
-            }
+          );
+          // prunning performance
+          const perfWrapper = performance.timerify(
+            pso(
+              target_error,
+              pruningListsMempool,
+              list_eliminator_ratio,
+              n_head_lists,
+              current_blockchain_size
+            )
           );
 
-          // get the pruned blockchain size
-          const newPrunedBlockchainSize = await sizeof(newPrunedblockchain);
+          console.log("pruning list", JSON.stringify(psoList));
 
-          /// new pruned Blockchain prunedBlockchainInfo
-          prunedBlockchainInfo = {
-            prunerId: myPeerId,
-            choosedList: psoList,
-            prunedBlockchainSize: newPrunedBlockchainSize,
-            lastTimePruned: new Date().getTime(),
-            data: newPrunedblockchain,
-          };
-          writeMessageToPeers(
-            MessageType.RECEIVE_PRUNED_BLOCKCHAIN,
-            prunedBlockchainInfo
-          );
+          perfWrapper();
+          // returned psoList
+          if (psoList) {
+            // delete pruning data from current currentBlockchainToPrune
+            const newPrunedblockchain = await currentBlockchainToPrune.map(
+              (block) => {
+                return Object.keys(block).forEach(function(key, index) {
+                  if (psoList.pruningData.includes(key)) delete block[key];
+                });
+              }
+            );
+
+            // get the pruned blockchain size
+            const newPrunedBlockchainSize = await sizeof(newPrunedblockchain);
+
+            /// new pruned Blockchain prunedBlockchainInfo
+            prunedBlockchainInfo = {
+              prunerId: myPeerId,
+              choosedList: psoList,
+              prunedBlockchainSize: newPrunedBlockchainSize,
+              lastTimePruned: new Date().getTime(),
+              data: newPrunedblockchain,
+            };
+            writeMessageToPeers(
+              MessageType.RECEIVE_PRUNED_BLOCKCHAIN,
+              prunedBlockchainInfo
+            );
+          }
         }
-      }
 
-      console.log(JSON.stringify(chain.blockchain));
-      console.log(
-        "-----------creating new block || pruning blockchain -----------------"
-      );
+        console.log(JSON.stringify(chain.blockchain));
+        console.log(
+          "-----------creating new block || pruning blockchain -----------------"
+        );
+      }
+      // display current blockchain state
+      setTimeout(function() {
+        console.log("CURRENT ABISCHAIN BLOCKCHAIN  STATE", chain.blockchain);
+      }, 5000);
     }
-    // display current blockchain state
-    setTimeout(function() {
-      console.log("CURRENT ABISCHAIN BLOCKCHAIN  STATE", chain.blockchain);
-    }, 5000);
   }
 });
 job.start();
