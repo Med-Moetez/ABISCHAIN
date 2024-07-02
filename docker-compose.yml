@@ -1,0 +1,266 @@
+version: '3.8'
+services:
+  agent-8075:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - PORT=8075
+        - TYPE=fullNode
+        - REDIS_PORT=6379
+    ports:
+      - "8075:8075"
+    networks:
+      - express-network
+    depends_on:
+      - redis-8075
+    environment:
+      - PORT=8075
+      - TYPE=fullNode
+      - REDIS_HOST=redis-8075
+      - REDIS_PORT=6379
+
+  redis-8075:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    networks:
+      - express-network
+  agent-8076:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - PORT=8076
+        - TYPE=fullNode
+        - REDIS_PORT=6380
+    ports:
+      - "8076:8076"
+    networks:
+      - express-network
+    depends_on:
+      - redis-8076
+    environment:
+      - PORT=8076
+      - TYPE=fullNode
+      - REDIS_HOST=redis-8076
+      - REDIS_PORT=6379
+
+  redis-8076:
+    image: redis:latest
+    ports:
+      - "6380:6379"
+    networks:
+      - express-network
+  agent-8077:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - PORT=8077
+        - TYPE=fullNode
+        - REDIS_PORT=6381
+    ports:
+      - "8077:8077"
+    networks:
+      - express-network
+    depends_on:
+      - redis-8077
+    environment:
+      - PORT=8077
+      - TYPE=fullNode
+      - REDIS_HOST=redis-8077
+      - REDIS_PORT=6379
+
+  redis-8077:
+    image: redis:latest
+    ports:
+      - "6381:6379"
+    networks:
+      - express-network
+  agent-8078:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - PORT=8078
+        - TYPE=fullNode
+        - REDIS_PORT=6382
+    ports:
+      - "8078:8078"
+    networks:
+      - express-network
+    depends_on:
+      - redis-8078
+    environment:
+      - PORT=8078
+      - TYPE=fullNode
+      - REDIS_HOST=redis-8078
+      - REDIS_PORT=6379
+
+  redis-8078:
+    image: redis:latest
+    ports:
+      - "6382:6379"
+    networks:
+      - express-network
+  agent-8079:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - PORT=8079
+        - TYPE=fullNode
+        - REDIS_PORT=6383
+    ports:
+      - "8079:8079"
+    networks:
+      - express-network
+    depends_on:
+      - redis-8079
+    environment:
+      - PORT=8079
+      - TYPE=fullNode
+      - REDIS_HOST=redis-8079
+      - REDIS_PORT=6379
+
+  redis-8079:
+    image: redis:latest
+    ports:
+      - "6383:6379"
+    networks:
+      - express-network
+  agent-8080:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - PORT=8080
+        - TYPE=lightNode
+        - REDIS_PORT=6384
+    ports:
+      - "8080:8080"
+    networks:
+      - express-network
+    depends_on:
+      - redis-8080
+    environment:
+      - PORT=8080
+      - TYPE=lightNode
+      - REDIS_HOST=redis-8080
+      - REDIS_PORT=6379
+
+  redis-8080:
+    image: redis:latest
+    ports:
+      - "6384:6379"
+    networks:
+      - express-network
+  agent-8081:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - PORT=8081
+        - TYPE=lightNode
+        - REDIS_PORT=6385
+    ports:
+      - "8081:8081"
+    networks:
+      - express-network
+    depends_on:
+      - redis-8081
+    environment:
+      - PORT=8081
+      - TYPE=lightNode
+      - REDIS_HOST=redis-8081
+      - REDIS_PORT=6379
+
+  redis-8081:
+    image: redis:latest
+    ports:
+      - "6385:6379"
+    networks:
+      - express-network
+  agent-8082:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - PORT=8082
+        - TYPE=lightNode
+        - REDIS_PORT=6386
+    ports:
+      - "8082:8082"
+    networks:
+      - express-network
+    depends_on:
+      - redis-8082
+    environment:
+      - PORT=8082
+      - TYPE=lightNode
+      - REDIS_HOST=redis-8082
+      - REDIS_PORT=6379
+
+  redis-8082:
+    image: redis:latest
+    ports:
+      - "6386:6379"
+    networks:
+      - express-network
+  agent-8083:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - PORT=8083
+        - TYPE=lightNode
+        - REDIS_PORT=6387
+    ports:
+      - "8083:8083"
+    networks:
+      - express-network
+    depends_on:
+      - redis-8083
+    environment:
+      - PORT=8083
+      - TYPE=lightNode
+      - REDIS_HOST=redis-8083
+      - REDIS_PORT=6379
+
+  redis-8083:
+    image: redis:latest
+    ports:
+      - "6387:6379"
+    networks:
+      - express-network
+  agent-8084:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - PORT=8084
+        - TYPE=lightNode
+        - REDIS_PORT=6388
+    ports:
+      - "8084:8084"
+    networks:
+      - express-network
+    depends_on:
+      - redis-8084
+    environment:
+      - PORT=8084
+      - TYPE=lightNode
+      - REDIS_HOST=redis-8084
+      - REDIS_PORT=6379
+
+  redis-8084:
+    image: redis:latest
+    ports:
+      - "6388:6379"
+    networks:
+      - express-network
+
+networks:
+  express-network:
+    driver: bridge

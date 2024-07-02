@@ -8,7 +8,7 @@ const { Level } = require("level");
 const fs = require("fs");
 let db;
 // for checking if level db is empty
-const isEmpty = require("level-is-empty");
+// const isEmpty = require("level-is-empty");
 //the blockchain
 const blockchain = [];
 
@@ -20,11 +20,11 @@ const createDb = (peerId, Blockchain) => {
     db = new Level(dir);
   }
 };
-const checkEmptyDb = () => {
-  isEmpty(db, function(err, empty) {
-    return empty;
-  });
-};
+// const checkEmptyDb = () => {
+//   isEmpty(db, function(err, empty) {
+//     return empty;
+//   });
+// };
 
 const getGenesisBlock = (miner) => {
   const tree = new MerkleTree([], SHA256);
@@ -54,8 +54,8 @@ const addBlock = (newBlock) => {
   } else {
     let prevBlock = getLatestBlock();
     if (
-      prevBlock.index < newBlock.index &&
-      newBlock.blockHeader.previousBlockHeader === prevBlock.blockHeader.hash
+      prevBlock?.index < newBlock?.index &&
+      newBlock?.blockHeader.previousBlockHeader === prevBlock?.blockHeader.hash
     ) {
       blockchain.push(newBlock);
       storeBlock(newBlock); // When you generate a new block using the generateNextBlock method, you can now store the block in the LevelDB database
@@ -112,7 +112,7 @@ const generateNextBlock = async (miner, dataValue, txns) => {
   const nextIndex = prevBlock.index + 1;
   const nextTime = moment().unix();
   const dataToArray = Object.entries(txns);
-  const leaves = await dataToArray.map((x) => SHA256(x));
+  const leaves = dataToArray.map((x) => SHA256(x));
   const tree = new MerkleTree(leaves, SHA256);
   const rootHash = tree.getRoot().toString("hex");
   const nextHash = SHA256(prevHash + nextTime + rootHash).toString();
@@ -235,7 +235,7 @@ if (typeof exports != "undefined") {
   exports.getDbBlock = getDbBlock;
   exports.storeBlock = storeBlock;
   exports.addChainBlocks = addChainBlocks;
-  exports.checkEmptyDb = checkEmptyDb;
+  // exports.checkEmptyDb = checkEmptyDb;
   exports.simpleCheckValid = simpleCheckValid;
   exports.deepCheckValid = deepCheckValid;
   exports.checkDataOfPrunedBlock = checkDataOfPrunedBlock;

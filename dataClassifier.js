@@ -1,7 +1,7 @@
 // data classifier ==> classify text using n-grams and cosine similarity.
 const { Classifier } = require("ml-classify-text");
 const { healthData, financeData, ITData } = require("./TrainingData/index");
-const utils = require("./utlis");
+const utils = require("./utils");
 // by word if value min max is equal to 1
 //  {
 // nGramMin: 1,

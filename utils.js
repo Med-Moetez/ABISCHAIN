@@ -35,12 +35,12 @@ const { dataSetGenerate, search, getDataset } = require("data-search");
 // };
 
 const getOrSetCache = async (redisClient, key, fetchFunction) => {
-  const cachedData = await utils.getCache(redisClient, key);
+  const cachedData = await getCache(redisClient, key);
   if (cachedData !== null) {
     return JSON.parse(cachedData);
   }
   const newData = await fetchFunction();
-  await utils.setCache(redisClient, key, JSON.stringify(newData));
+  await setCache(redisClient, key, JSON.stringify(newData));
   return newData;
 };
 const getCache = async (redisClient, key) => {
